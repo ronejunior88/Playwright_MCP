@@ -28,6 +28,10 @@ function buildProduct(overrides = {}) {
   return { ...defaultProduct, ...overrides };
 }
 
+function buildCart(products) {
+  return { produtos: products };
+}
+
 async function loginUser(request, email = 'fulano@qa.com', password = 'teste') {
   const response = await request.post(`${BASE_URL}/login`, {
     data: { email, password },
@@ -41,13 +45,13 @@ async function loginUser(request, email = 'fulano@qa.com', password = 'teste') {
   return body;
 }
 
-async function createAdminSession(request) {
-  const adminUser = buildUser({ administrador: 'true' });
-  const response = await request.post(`${BASE_URL}/usuarios`, { data: adminUser });
+async function createUserSession(request, overrides = {}) {
+  const user = buildUser(overrides);
+  const response = await request.post(`${BASE_URL}/usuarios`, { data: user });
 
   expect(response.status()).toBe(201);
   const body = await response.json();
-  const login = await loginUser(request, adminUser.email, adminUser.password);
+  const login = await loginUser(request, user.email, user.password);
 
   return {
     userId: body._id,
@@ -55,11 +59,17 @@ async function createAdminSession(request) {
   };
 }
 
+async function createAdminSession(request) {
+  return createUserSession(request, { administrador: 'true' });
+}
+
 module.exports = {
   BASE_URL,
   uniqueEmail,
   buildUser,
   buildProduct,
+  buildCart,
   loginUser,
+  createUserSession,
   createAdminSession,
 };
