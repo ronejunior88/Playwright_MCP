@@ -1,6 +1,8 @@
 const { test, expect } = require('@playwright/test');
+const { CartsApi } = require('../api/carts-api');
+const { ProductsApi } = require('../api/products-api');
+const { UsersApi } = require('../api/users-api');
 const {
-  BASE_URL,
   buildCart,
   buildProduct,
   createAdminSession,
@@ -12,8 +14,14 @@ test.describe('ServeRest - Carrinhos', () => {
   let buyerSession;
   let product;
   let productId;
+  let cartsApi;
+  let productsApi;
+  let usersApi;
 
   test.beforeEach(async ({ request }) => {
+    cartsApi = new CartsApi(request);
+    productsApi = new ProductsApi(request);
+    usersApi = new UsersApi(request);
     adminSession = undefined;
     buyerSession = undefined;
     product = buildProduct();
@@ -22,53 +30,46 @@ test.describe('ServeRest - Carrinhos', () => {
     adminSession = await createAdminSession(request);
     buyerSession = await createUserSession(request);
 
-    const response = await request.post(`${BASE_URL}/produtos`, {
-      headers: { Authorization: adminSession.authorization },
-      data: product,
-    });
+    const response = await productsApi.create(product, adminSession.authorization);
 
     expect(response.status()).toBe(201);
     const body = await response.json();
     productId = body._id;
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async () => {
     if (buyerSession) {
-      await request.delete(`${BASE_URL}/carrinhos/cancelar-compra`, {
-        headers: { Authorization: buyerSession.authorization },
-      });
+      await cartsApi.cancelPurchase(buyerSession.authorization);
     }
 
     if (adminSession && productId) {
-      await request.delete(`${BASE_URL}/produtos/${productId}`, {
-        headers: { Authorization: adminSession.authorization },
-      });
+      await productsApi.delete(productId, adminSession.authorization);
     }
 
     if (buyerSession) {
-      await request.delete(`${BASE_URL}/usuarios/${buyerSession.userId}`);
+      await usersApi.delete(buyerSession.userId);
     }
 
     if (adminSession) {
-      await request.delete(`${BASE_URL}/usuarios/${adminSession.userId}`);
+      await usersApi.delete(adminSession.userId);
     }
   });
 
-  async function addProductToCart(request, quantity = 1, id = productId) {
-    return request.post(`${BASE_URL}/carrinhos`, {
-      headers: { Authorization: buyerSession.authorization },
-      data: buildCart([{ idProduto: id, quantidade: quantity }]),
-    });
+  async function addProductToCart(quantity = 1, id = productId) {
+    return cartsApi.create(
+      buildCart([{ idProduto: id, quantidade: quantity }]),
+      buyerSession.authorization,
+    );
   }
 
-  async function getProduct(request) {
-    const response = await request.get(`${BASE_URL}/produtos/${productId}`);
+  async function getProduct() {
+    const response = await productsApi.getById(productId);
     expect(response.status()).toBe(200);
     return response.json();
   }
 
   test('deve listar carrinhos cadastrados', async ({ request }) => {
-    const response = await request.get(`${BASE_URL}/carrinhos`);
+    const response = await cartsApi.list();
 
     expect(response.status()).toBe(200);
 
@@ -79,12 +80,12 @@ test.describe('ServeRest - Carrinhos', () => {
   });
 
   test('deve cadastrar e consultar o carrinho do usuário', async ({ request }) => {
-    const response = await addProductToCart(request, 2);
+    const response = await addProductToCart(2);
 
     expect(response.status()).toBe(201);
 
     const createdCart = await response.json();
-    const getResponse = await request.get(`${BASE_URL}/carrinhos/${createdCart._id}`);
+    const getResponse = await cartsApi.getById(createdCart._id);
 
     expect(getResponse.status()).toBe(200);
 
@@ -93,14 +94,14 @@ test.describe('ServeRest - Carrinhos', () => {
     expect(cart.idUsuario).toBe(buyerSession.userId);
     expect(cart.quantidadeTotal).toBe(2);
     expect(cart.produtos[0].idProduto).toBe(productId);
-    expect((await getProduct(request)).quantidade).toBe(product.quantidade - 2);
+    expect((await getProduct()).quantidade).toBe(product.quantidade - 2);
   });
 
   test('não deve permitir mais de um carrinho por usuário', async ({ request }) => {
-    const firstResponse = await addProductToCart(request);
+    const firstResponse = await addProductToCart();
     expect(firstResponse.status()).toBe(201);
 
-    const secondResponse = await addProductToCart(request);
+    const secondResponse = await addProductToCart();
 
     expect(secondResponse.status()).toBe(400);
 
@@ -109,13 +110,13 @@ test.describe('ServeRest - Carrinhos', () => {
   });
 
   test('não deve permitir produtos duplicados no mesmo carrinho', async ({ request }) => {
-    const response = await request.post(`${BASE_URL}/carrinhos`, {
-      headers: { Authorization: buyerSession.authorization },
-      data: buildCart([
+    const response = await cartsApi.create(
+      buildCart([
         { idProduto: productId, quantidade: 1 },
         { idProduto: productId, quantidade: 1 },
       ]),
-    });
+      buyerSession.authorization,
+    );
 
     expect(response.status()).toBe(400);
 
@@ -124,7 +125,7 @@ test.describe('ServeRest - Carrinhos', () => {
   });
 
   test('não deve adicionar produto inexistente', async ({ request }) => {
-    const response = await addProductToCart(request, 1, 'id-inexistente');
+    const response = await addProductToCart(1, 'id-inexistente');
 
     expect(response.status()).toBe(400);
 
@@ -133,7 +134,7 @@ test.describe('ServeRest - Carrinhos', () => {
   });
 
   test('não deve exceder o estoque disponível', async ({ request }) => {
-    const response = await addProductToCart(request, product.quantidade + 1);
+    const response = await addProductToCart(product.quantidade + 1);
 
     expect(response.status()).toBe(400);
 
@@ -142,43 +143,37 @@ test.describe('ServeRest - Carrinhos', () => {
   });
 
   test('deve restaurar o estoque ao cancelar a compra', async ({ request }) => {
-    const createResponse = await addProductToCart(request, 2);
+    const createResponse = await addProductToCart(2);
     expect(createResponse.status()).toBe(201);
 
-    const reducedProduct = await getProduct(request);
+    const reducedProduct = await getProduct();
     expect(reducedProduct.quantidade).toBe(product.quantidade - 2);
 
-    const cancelResponse = await request.delete(`${BASE_URL}/carrinhos/cancelar-compra`, {
-      headers: { Authorization: buyerSession.authorization },
-    });
+    const cancelResponse = await cartsApi.cancelPurchase(buyerSession.authorization);
 
     expect(cancelResponse.status()).toBe(200);
-    expect((await getProduct(request)).quantidade).toBe(product.quantidade);
+    expect((await getProduct()).quantidade).toBe(product.quantidade);
   });
 
   test('deve remover o carrinho ao concluir a compra sem devolver o estoque', async ({ request }) => {
-    const createResponse = await addProductToCart(request, 2);
+    const createResponse = await addProductToCart(2);
     expect(createResponse.status()).toBe(201);
     const createdCart = await createResponse.json();
 
-    const finishResponse = await request.delete(`${BASE_URL}/carrinhos/concluir-compra`, {
-      headers: { Authorization: buyerSession.authorization },
-    });
+    const finishResponse = await cartsApi.checkout(buyerSession.authorization);
 
     expect(finishResponse.status()).toBe(200);
-    expect((await getProduct(request)).quantidade).toBe(product.quantidade - 2);
+    expect((await getProduct()).quantidade).toBe(product.quantidade - 2);
 
-    const getCartResponse = await request.get(`${BASE_URL}/carrinhos/${createdCart._id}`);
+    const getCartResponse = await cartsApi.getById(createdCart._id);
     expect(getCartResponse.status()).toBe(400);
   });
 
   test('não deve excluir produto que pertence a carrinho ativo', async ({ request }) => {
-    const cartResponse = await addProductToCart(request);
+    const cartResponse = await addProductToCart();
     expect(cartResponse.status()).toBe(201);
 
-    const deleteResponse = await request.delete(`${BASE_URL}/produtos/${productId}`, {
-      headers: { Authorization: adminSession.authorization },
-    });
+    const deleteResponse = await productsApi.delete(productId, adminSession.authorization);
 
     expect(deleteResponse.status()).toBe(400);
 
@@ -187,9 +182,7 @@ test.describe('ServeRest - Carrinhos', () => {
   });
 
   test('não deve cadastrar carrinho sem token', async ({ request }) => {
-    const response = await request.post(`${BASE_URL}/carrinhos`, {
-      data: buildCart([{ idProduto: productId, quantidade: 1 }]),
-    });
+    const response = await cartsApi.create(buildCart([{ idProduto: productId, quantidade: 1 }]));
 
     expect(response.status()).toBe(401);
   });

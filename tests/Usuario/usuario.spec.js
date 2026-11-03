@@ -1,13 +1,17 @@
 const { test, expect } = require('@playwright/test');
-const { BASE_URL, buildUser, uniqueEmail } = require('../library.spec');
+const { UsersApi } = require('../api/users-api');
+const { buildUser, uniqueEmail } = require('../library.spec');
 
 test.describe('ServeRest - Usuários', () => {
+  let usersApi;
+
+  test.beforeEach(({ request }) => {
+    usersApi = new UsersApi(request);
+  });
+
   test('deve cadastrar um usuário com dados válidos', async ({ request }) => {
     const payload = buildUser();
-
-    const response = await request.post(`${BASE_URL}/usuarios`, {
-      data: payload,
-    });
+    const response = await usersApi.create(payload);
 
     expect(response.status()).toBe(201);
 
@@ -19,15 +23,11 @@ test.describe('ServeRest - Usuários', () => {
   test('não deve cadastrar um usuário com e-mail duplicado', async ({ request }) => {
     const payload = buildUser({ email: uniqueEmail('duplicado') });
 
-    const firstResponse = await request.post(`${BASE_URL}/usuarios`, {
-      data: payload,
-    });
+    const firstResponse = await usersApi.create(payload);
 
     expect(firstResponse.status()).toBe(201);
 
-    const duplicateResponse = await request.post(`${BASE_URL}/usuarios`, {
-      data: payload,
-    });
+    const duplicateResponse = await usersApi.create(payload);
 
     expect(duplicateResponse.status()).toBe(400);
 
@@ -36,7 +36,7 @@ test.describe('ServeRest - Usuários', () => {
   });
 
   test('deve listar usuários cadastrados', async ({ request }) => {
-    const response = await request.get(`${BASE_URL}/usuarios`);
+    const response = await usersApi.list();
 
     expect(response.status()).toBe(200);
 
@@ -47,14 +47,12 @@ test.describe('ServeRest - Usuários', () => {
 
   test('deve buscar um usuário por ID', async ({ request }) => {
     const createdUser = buildUser();
-    const createResponse = await request.post(`${BASE_URL}/usuarios`, {
-      data: createdUser,
-    });
+    const createResponse = await usersApi.create(createdUser);
 
     expect(createResponse.status()).toBe(201);
     const createdBody = await createResponse.json();
 
-    const response = await request.get(`${BASE_URL}/usuarios/${createdBody._id}`);
+    const response = await usersApi.getById(createdBody._id);
 
     expect(response.status()).toBe(200);
 
@@ -65,9 +63,7 @@ test.describe('ServeRest - Usuários', () => {
 
   test('deve atualizar um usuário existente', async ({ request }) => {
     const createdUser = buildUser();
-    const createResponse = await request.post(`${BASE_URL}/usuarios`, {
-      data: createdUser,
-    });
+    const createResponse = await usersApi.create(createdUser);
 
     expect(createResponse.status()).toBe(201);
     const createdBody = await createResponse.json();
@@ -79,9 +75,7 @@ test.describe('ServeRest - Usuários', () => {
       administrador: 'false',
     };
 
-    const response = await request.put(`${BASE_URL}/usuarios/${createdBody._id}`, {
-      data: updatedUser,
-    });
+    const response = await usersApi.update(createdBody._id, updatedUser);
 
     expect(response.status()).toBe(200);
 
@@ -92,14 +86,12 @@ test.describe('ServeRest - Usuários', () => {
 
   test('deve excluir um usuário cadastrado sem carrinho', async ({ request }) => {
     const createdUser = buildUser();
-    const createResponse = await request.post(`${BASE_URL}/usuarios`, {
-      data: createdUser,
-    });
+    const createResponse = await usersApi.create(createdUser);
 
     expect(createResponse.status()).toBe(201);
     const createdBody = await createResponse.json();
 
-    const response = await request.delete(`${BASE_URL}/usuarios/${createdBody._id}`);
+    const response = await usersApi.delete(createdBody._id);
 
     expect(response.status()).toBe(200);
 

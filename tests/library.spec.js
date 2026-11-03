@@ -1,6 +1,7 @@
 const { expect } = require('@playwright/test');
-
-const BASE_URL = 'https://serverest.dev';
+const { BASE_URL } = require('./api/api-client');
+const { LoginApi } = require('./api/login-api');
+const { UsersApi } = require('./api/users-api');
 
 function uniqueEmail(prefix = 'qa') {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}@qa.com`;
@@ -33,9 +34,8 @@ function buildCart(products) {
 }
 
 async function loginUser(request, email = 'fulano@qa.com', password = 'teste') {
-  const response = await request.post(`${BASE_URL}/login`, {
-    data: { email, password },
-  });
+  const loginApi = new LoginApi(request);
+  const response = await loginApi.login({ email, password });
 
   expect(response.status()).toBe(200);
 
@@ -47,7 +47,8 @@ async function loginUser(request, email = 'fulano@qa.com', password = 'teste') {
 
 async function createUserSession(request, overrides = {}) {
   const user = buildUser(overrides);
-  const response = await request.post(`${BASE_URL}/usuarios`, { data: user });
+  const usersApi = new UsersApi(request);
+  const response = await usersApi.create(user);
 
   expect(response.status()).toBe(201);
   const body = await response.json();

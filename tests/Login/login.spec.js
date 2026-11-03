@@ -1,13 +1,12 @@
 const { test, expect } = require('@playwright/test');
-const { BASE_URL, loginUser } = require('../library.spec');
+const { LoginApi } = require('../api/login-api');
 
 test.describe('ServeRest - Login', () => {
   test('deve autenticar com credenciais válidas', async ({ request }) => {
-    const response = await request.post(`${BASE_URL}/login`, {
-      data: {
-        email: 'fulano@qa.com',
-        password: 'teste',
-      },
+    const loginApi = new LoginApi(request);
+    const response = await loginApi.login({
+      email: 'fulano@qa.com',
+      password: 'teste',
     });
 
     expect(response.status()).toBe(200);
@@ -17,15 +16,13 @@ test.describe('ServeRest - Login', () => {
     expect(body).toHaveProperty('authorization');
     expect(body.authorization).toContain('Bearer ');
 
-    await loginUser(request, 'fulano@qa.com', 'teste');
   });
 
   test('não deve autenticar com senha inválida', async ({ request }) => {
-    const response = await request.post(`${BASE_URL}/login`, {
-      data: {
-        email: 'fulano@qa.com',
-        password: 'senha-errada',
-      },
+    const loginApi = new LoginApi(request);
+    const response = await loginApi.login({
+      email: 'fulano@qa.com',
+      password: 'senha-errada',
     });
 
     expect(response.status()).toBe(401);
