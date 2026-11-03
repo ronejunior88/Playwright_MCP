@@ -20,8 +20,9 @@ tests/
 |-- Usuario/usuario.spec.js
 |-- Produtos/produtos.spec.js
 |-- Carrinhos/carrinhos.spec.js
-`-- library.spec.js
+`-- library.js
 scripts/run-tests.js
+playwright.config.js
 ```
 
 ### Clientes API
@@ -36,7 +37,7 @@ Cada classe em `tests/api` encapsula as operacoes HTTP de um recurso:
 
 Os clientes retornam a resposta HTTP. Os specs mantem os asserts de status, mensagem, payload e regras de negocio. Como a suite testa API, esse padrao de clientes por recurso e o adequado aqui; Page Object Model (POM) e destinado a paginas e elementos de interface. Caso testes de UI sejam adicionados, devem ter uma camada de Page Objects separada.
 
-`tests/library.spec.js` contem dados e helpers compartilhados, como geracao de e-mail unico, builders de usuario/produto/carrinho e criacao de sessoes comum e administradora.
+`tests/library.js` contem dados e helpers compartilhados, como geracao de e-mail unico, builders de usuario/produto/carrinho e criacao de sessoes comum e administradora. A configuracao do Playwright limita a descoberta aos specs JavaScript dentro de `tests/`.
 
 ## Cobertura Atual
 
@@ -48,9 +49,10 @@ Os clientes retornam a resposta HTTP. Os specs mantem os asserts de status, mens
 ### Usuarios - 6 testes
 
 - Cadastro valido e bloqueio de e-mail duplicado.
-- Listagem e busca por ID.
+- Listagem, busca por ID e resposta para ID inexistente.
 - Edicao de usuario.
-- Exclusao de usuario sem carrinho.
+- Exclusao de usuario sem carrinho e verificacao da remocao.
+- Os usuarios criados sao removidos ao final de cada teste.
 
 ### Produtos - 8 testes
 
@@ -83,7 +85,7 @@ npm install
 Execute todos os specs atuais:
 
 ```bash
-npx playwright test tests/Login/login.spec.js tests/Usuario/usuario.spec.js tests/Produtos/produtos.spec.js tests/Carrinhos/carrinhos.spec.js --reporter=line
+npm test
 ```
 
 Execute apenas um recurso, por exemplo:
@@ -92,7 +94,7 @@ Execute apenas um recurso, por exemplo:
 npx playwright test tests/Carrinhos/carrinhos.spec.js --reporter=line
 ```
 
-No momento, use os caminhos dos specs explicitamente: `library.spec.js` e uma biblioteca compartilhada, mas o nome tambem corresponde ao padrao de descoberta de testes do Playwright. O script `npm test` chama a descoberta automatica e pode tentar carregar essa biblioteca como spec.
+O login cria um usuario exclusivo para cada teste e remove esse usuario ao final, evitando dependencia de contas compartilhadas na API publica.
 
 ## Padroes para Novos Testes
 

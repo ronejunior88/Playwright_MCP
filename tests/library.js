@@ -1,5 +1,4 @@
 const { expect } = require('@playwright/test');
-const { BASE_URL } = require('./api/api-client');
 const { LoginApi } = require('./api/login-api');
 const { UsersApi } = require('./api/users-api');
 
@@ -33,7 +32,7 @@ function buildCart(products) {
   return { produtos: products };
 }
 
-async function loginUser(request, email = 'fulano@qa.com', password = 'teste') {
+async function loginUser(request, email, password) {
   const loginApi = new LoginApi(request);
   const response = await loginApi.login({ email, password });
 
@@ -52,7 +51,16 @@ async function createUserSession(request, overrides = {}) {
 
   expect(response.status()).toBe(201);
   const body = await response.json();
-  const login = await loginUser(request, user.email, user.password);
+  expect(body._id).toBeTruthy();
+
+  let login;
+  try {
+    login = await loginUser(request, user.email, user.password);
+  } catch (error) {
+    const cleanupResponse = await usersApi.delete(body._id);
+    expect(cleanupResponse.status()).toBe(200);
+    throw error;
+  }
 
   return {
     userId: body._id,
@@ -65,7 +73,6 @@ async function createAdminSession(request) {
 }
 
 module.exports = {
-  BASE_URL,
   uniqueEmail,
   buildUser,
   buildProduct,

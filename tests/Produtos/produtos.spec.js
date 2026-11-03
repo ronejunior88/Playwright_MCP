@@ -6,7 +6,7 @@ const {
   buildUser,
   createAdminSession,
   loginUser,
-} = require('../library.spec');
+} = require('../library');
 
 test.describe('ServeRest - Produtos', () => {
   let adminSession;
